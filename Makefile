@@ -2,14 +2,6 @@
 
 .PHONY: help compile install monitor backend scan-ble
 
-help:
-	@printf '%s\n' \
-		'make compile  Compile firmware using ./arduino.json' \
-		'make install  Compile and upload firmware' \
-		'make monitor  Open the configured serial monitor' \
-		'make backend  Run the backend in this terminal' \
-		'make scan-ble  Scan for nearby LEGO hubs'
-
 compile:
 	./tools/arduino compile
 
