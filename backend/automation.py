@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 
 from .arduino import Arduino
 from .lego_remote import LegoRemote
@@ -23,6 +24,7 @@ class Automation:
             for tag in config["nfc_tags"]
         }
         self._last_seen: dict[str, float] = {}
+        self._event_callbacks: list[Callable[[str], None]] = []
         remote.on_button(self._on_button)
 
     async def start(self) -> None:
@@ -33,6 +35,13 @@ class Automation:
 
     async def on_button(self, remote: str, button: str) -> None:
         pass
+
+    def on_event(self, callback: Callable[[str], None]) -> None:
+        self._event_callbacks.append(callback)
+
+    def event(self, message: str) -> None:
+        for callback in self._event_callbacks:
+            callback(message)
 
     def on_detector(
         self,

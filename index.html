@@ -199,6 +199,14 @@
       while (events.children.length > 100) events.lastChild.remove();
       refresh();
     });
+    stream.addEventListener("script", message => {
+      const event = JSON.parse(message.data);
+      events.prepend(element(
+        "div",
+        `${new Date().toLocaleTimeString()} ${event.message}`
+      ));
+      while (events.children.length > 100) events.lastChild.remove();
+    });
     stream.onerror = () => { status.textContent = "event stream reconnecting…"; };
 
     refresh();

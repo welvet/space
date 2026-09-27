@@ -7,3 +7,4 @@ This is a small hobby hack. Keep the implementation simple, direct, and easy to 
 - Do not add documentation or explanatory code comments.
 - Keep exception handling lean; handle only failures that need a concrete recovery action.
 - Avoid speculative features, compatibility layers, and premature generalization.
+- Work directly on `master`; do not create feature branches or worktrees for this repository.

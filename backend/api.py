@@ -7,6 +7,7 @@ from pathlib import Path
 from aiohttp import web
 
 from .arduino import Arduino
+from .automation import Automation
 from .lego_remote import LegoRemote
 from .lego_train import LegoTrain
 
@@ -20,15 +21,19 @@ class Api:
         train: LegoTrain,
         remote: LegoRemote,
         arduino: Arduino,
+        automation: Automation,
     ) -> None:
         self._host = config["host"]
         self._port = config["port"]
         self._train = train
         self._remote = remote
         self._arduino = arduino
-        self._events: set[asyncio.Queue[dict[str, object]]] = set()
+        self._events: set[
+            asyncio.Queue[tuple[str, dict[str, object]]]
+        ] = set()
         self._runner: web.AppRunner | None = None
         arduino.on_detection(self._detection)
+        automation.on_event(self._script_event)
 
     async def start(self) -> None:
         app = web.Application()
@@ -77,14 +82,14 @@ class Api:
             "X-Accel-Buffering": "no",
         })
         await response.prepare(request)
-        queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
+        queue: asyncio.Queue[tuple[str, dict[str, object]]] = asyncio.Queue()
         self._events.add(queue)
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), 15)
+                    name, event = await asyncio.wait_for(queue.get(), 15)
                     data = json.dumps(event, separators=(",", ":"))
-                    await response.write(f"event: detector\ndata: {data}\n\n".encode())
+                    await response.write(f"event: {name}\ndata: {data}\n\n".encode())
                 except TimeoutError:
                     await response.write(b": ping\n\n")
         except (ConnectionError, RuntimeError):
@@ -106,5 +111,11 @@ class Api:
             "tag": tag,
             "detected": detected,
         }
+        self._publish("detector", event)
+
+    def _script_event(self, message: str) -> None:
+        self._publish("script", {"message": message})
+
+    def _publish(self, name: str, event: dict[str, object]) -> None:
         for queue in self._events:
-            queue.put_nowait(event)
+            queue.put_nowait((name, event))
