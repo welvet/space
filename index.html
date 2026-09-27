@@ -53,6 +53,9 @@
   <h2>Trains</h2>
   <div id="trains" class="grid"></div>
 
+  <h2>Remotes</h2>
+  <div id="remotes" class="grid"></div>
+
   <h2>Arduinos</h2>
   <div id="arduinos" class="grid"></div>
 
@@ -61,6 +64,7 @@
 
   <script>
     const trains = document.querySelector("#trains");
+    const remotes = document.querySelector("#remotes");
     const arduinos = document.querySelector("#arduinos");
     const events = document.querySelector("#events");
     const status = document.querySelector("#status");
@@ -150,12 +154,32 @@
       }
     }
 
+    function renderRemotes(info) {
+      remotes.replaceChildren();
+      for (const [name, remote] of Object.entries(info)) {
+        const card = element("section", undefined, "card");
+        card.append(element("h3", name));
+        card.append(element(
+          "div",
+          remote.connected ? "connected" : "disconnected",
+          remote.connected ? "connected" : "disconnected"
+        ));
+        card.append(element(
+          "div",
+          `${remote.address} · battery ${remote.battery_percent ?? "–"}%`,
+          "muted"
+        ));
+        remotes.append(card);
+      }
+    }
+
     async function refresh() {
       try {
         const response = await fetch("/info");
         if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
         const info = await response.json();
         renderTrains(info.trains);
+        renderRemotes(info.remotes);
         renderArduinos(info.arduinos);
         status.textContent = "online";
       } catch (error) {

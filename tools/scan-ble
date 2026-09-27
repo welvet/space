@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+
+import asyncio
+
+from bleak import BleakScanner
+
+LEGO_SERVICE = "00001623-1212-efde-1623-785feabcd123"
+
+
+async def main() -> None:
+    print("Scanning for LEGO hubs for 10 seconds…")
+    devices = await BleakScanner.discover(timeout=10, return_adv=True)
+    hubs = [
+        (device.address, advertisement.local_name or device.name or "unnamed")
+        for device, advertisement in devices.values()
+        if LEGO_SERVICE.lower() in {
+            service.lower() for service in advertisement.service_uuids
+        }
+    ]
+    if not hubs:
+        print("No LEGO hubs found. Turn one on and leave its LED blinking.")
+        return
+    for address, name in sorted(hubs):
+        print(f"{address}  {name}")
+
+
+asyncio.run(main())

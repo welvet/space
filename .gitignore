@@ -1,6 +1,7 @@
 arduino.json
 backend.json
 .venv/
+*.egg-info/
 __pycache__/
 *.py[cod]
 .DS_Store

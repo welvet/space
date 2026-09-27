@@ -7,3 +7,6 @@ class Script(Automation):
 
     async def on_train(self, train: str) -> None:
         pass
+
+    async def on_button(self, remote: str, button: str) -> None:
+        pass

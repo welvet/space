@@ -18,22 +18,22 @@ VOLTAGE_MAX_RAW = 3893.0
 VOLTAGE_MAX_V = 9.6
 
 
-class LegoBle:
+class LegoTrain:
     def __init__(self, trains: Mapping[str, str]) -> None:
         self._trains = dict(trains)
         self._clients: dict[str, BleakClient] = {}
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._battery: dict[str, int] = {}
         self._voltage: dict[str, float] = {}
-        self._log = logging.getLogger("backend.lego_ble")
+        self._log = logging.getLogger("backend.lego_train")
 
     async def start(self) -> None:
         if self._tasks:
-            raise RuntimeError("LegoBle is already started")
+            raise RuntimeError("LegoTrain is already started")
         for train, address in self._trains.items():
             self._tasks[train] = asyncio.create_task(
                 self._watch(train, address),
-                name=f"lego-ble:{train}",
+                name=f"lego-train:{train}",
             )
 
     async def setSpeed(self, train: str, speed: int) -> None:

@@ -7,7 +7,8 @@ from pathlib import Path
 from aiohttp import web
 
 from .arduino import Arduino
-from .lego_ble import LegoBle
+from .lego_remote import LegoRemote
+from .lego_train import LegoTrain
 
 INDEX = Path(__file__).resolve().parents[1] / "index.html"
 
@@ -16,12 +17,14 @@ class Api:
     def __init__(
         self,
         config: dict[str, object],
-        lego: LegoBle,
+        train: LegoTrain,
+        remote: LegoRemote,
         arduino: Arduino,
     ) -> None:
         self._host = config["host"]
         self._port = config["port"]
-        self._lego = lego
+        self._train = train
+        self._remote = remote
         self._arduino = arduino
         self._events: set[asyncio.Queue[dict[str, object]]] = set()
         self._runner: web.AppRunner | None = None
@@ -46,12 +49,13 @@ class Api:
 
     async def _info(self, _: web.Request) -> web.Response:
         return web.json_response({
-            "trains": self._lego.info(),
+            "trains": self._train.info(),
+            "remotes": self._remote.info(),
             "arduinos": self._arduino.info(),
         })
 
     async def _set_speed(self, request: web.Request) -> web.Response:
-        await self._lego.setSpeed(
+        await self._train.setSpeed(
             request.match_info["train"],
             int(request.match_info["speed"]),
         )
