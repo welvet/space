@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Space</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #eee;
+    }
+    body { max-width: 1000px; margin: auto; padding: 24px; }
+    h1, h2, h3 { margin: 0 0 12px; }
+    h2 { margin-top: 28px; }
+    #status { color: #999; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .card { background: #1d1d1d; border-radius: 12px; padding: 16px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .muted { color: #999; }
+    .connected { color: #62d68b; }
+    .disconnected { color: #f06b6b; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 13px;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover { background: #4a4a4a; }
+    button.stop { background: #8b3030; }
+    .item { padding: 9px 0; border-top: 1px solid #333; }
+    #events {
+      min-height: 80px;
+      max-height: 260px;
+      overflow: auto;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Space</h1>
+  <div id="status">Connecting…</div>
+
+  <h2>Trains</h2>
+  <div id="trains" class="grid"></div>
+
+  <h2>Arduinos</h2>
+  <div id="arduinos" class="grid"></div>
+
+  <h2>Events</h2>
+  <div id="events" class="card"></div>
+
+  <script>
+    const trains = document.querySelector("#trains");
+    const arduinos = document.querySelector("#arduinos");
+    const events = document.querySelector("#events");
+    const status = document.querySelector("#status");
+
+    function element(tag, text, className) {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    }
+
+    function action(label, path, className) {
+      const button = element("button", label, className);
+      button.onclick = async () => {
+        button.disabled = true;
+        try {
+          const response = await fetch(path, {method: "POST"});
+          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        } catch (error) {
+          status.textContent = error;
+        } finally {
+          button.disabled = false;
+        }
+      };
+      return button;
+    }
+
+    function renderTrains(info) {
+      trains.replaceChildren();
+      for (const [name, train] of Object.entries(info)) {
+        const card = element("section", undefined, "card");
+        card.append(element("h3", name));
+        card.append(element(
+          "div",
+          train.connected ? "connected" : "disconnected",
+          train.connected ? "connected" : "disconnected"
+        ));
+        card.append(element(
+          "div",
+          `battery ${train.battery_percent ?? "–"}% · ${train.voltage ?? "–"} V`,
+          "muted"
+        ));
+        const controls = element("div", undefined, "row");
+        for (const speed of [-100, -50, 0, 50, 100]) {
+          controls.append(action(
+            String(speed),
+            `/train/${encodeURIComponent(name)}/speed/${speed}`,
+            speed === 0 ? "stop" : ""
+          ));
+        }
+        card.append(controls);
+        trains.append(card);
+      }
+    }
+
+    function renderArduinos(info) {
+      arduinos.replaceChildren();
+      for (const [name, arduino] of Object.entries(info)) {
+        const card = element("section", undefined, "card");
+        card.append(element("h3", name));
+
+        for (const switchName of arduino.switches) {
+          const item = element("div", undefined, "item");
+          item.append(element("strong", `Switch ${switchName}`));
+          const controls = element("div", undefined, "row");
+          controls.append(action(
+            "Straight",
+            `/arduino/${encodeURIComponent(name)}/switch/${encodeURIComponent(switchName)}/straight`
+          ));
+          controls.append(action(
+            "Side",
+            `/arduino/${encodeURIComponent(name)}/switch/${encodeURIComponent(switchName)}/side`
+          ));
+          item.append(controls);
+          card.append(item);
+        }
+
+        for (const detector of arduino.detectors) {
+          const tag = arduino.detected[detector];
+          card.append(element(
+            "div",
+            `${detector}: ${tag ?? "empty"}`,
+            "item"
+          ));
+        }
+        arduinos.append(card);
+      }
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch("/info");
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        const info = await response.json();
+        renderTrains(info.trains);
+        renderArduinos(info.arduinos);
+        status.textContent = "online";
+      } catch (error) {
+        status.textContent = error;
+      }
+    }
+
+    const stream = new EventSource("/events");
+    stream.addEventListener("detector", message => {
+      const event = JSON.parse(message.data);
+      const line = element(
+        "div",
+        `${new Date().toLocaleTimeString()} ${event.arduino}/${event.detector} ` +
+          `${event.detected ? "detected" : "removed"} ${event.tag}`
+      );
+      events.prepend(line);
+      while (events.children.length > 100) events.lastChild.remove();
+      refresh();
+    });
+    stream.onerror = () => { status.textContent = "event stream reconnecting…"; };
+
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>
