@@ -23,14 +23,14 @@ class Automation:
             for train, config in trains.items()
             for tag in config["nfc_tags"]
         }
-        self._last_seen: dict[str, float] = {}
+        self._last_seen: dict[tuple[str, str], float] = {}
         self._event_callbacks: list[Callable[[str], None]] = []
         remote.on_button(self._on_button)
 
     async def start(self) -> None:
         pass
 
-    async def on_train(self, train: str) -> None:
+    async def on_train(self, train: str, detector: str) -> None:
         pass
 
     async def on_button(self, remote: str, button: str) -> None:
@@ -52,7 +52,7 @@ class Automation:
         self._arduino.on_detector(
             arduino,
             detector,
-            lambda tag: asyncio.create_task(self._detected(tag, cooldown)),
+            lambda tag: asyncio.create_task(self._detected(tag, detector, cooldown)),
         )
 
     async def setSpeed(self, train: str, speed: int) -> None:
@@ -69,17 +69,18 @@ class Automation:
     def _on_button(self, remote: str, button: str) -> None:
         asyncio.create_task(self.on_button(remote, button))
 
-    async def _detected(self, tag: str, cooldown: float) -> None:
+    async def _detected(self, tag: str, detector: str, cooldown: float) -> None:
         train = self._trains_by_tag.get(self._normalize(tag))
         if train is None:
             return
 
         now = asyncio.get_running_loop().time()
-        last_seen = self._last_seen.get(train)
+        key = (train, detector)
+        last_seen = self._last_seen.get(key)
         if last_seen is not None and now - last_seen < cooldown:
             return
-        self._last_seen[train] = now
-        await self.on_train(train)
+        self._last_seen[key] = now
+        await self.on_train(train, detector)
 
     @staticmethod
     def _normalize(tag: str) -> str:
