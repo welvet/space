@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from aiohttp import web
@@ -28,9 +31,7 @@ class Api:
         self._train = train
         self._remote = remote
         self._arduino = arduino
-        self._events: set[
-            asyncio.Queue[tuple[str, dict[str, object]]]
-        ] = set()
+        self._events: set[asyncio.Queue[dict[str, str]]] = set()
         self._runner: web.AppRunner | None = None
         arduino.on_detection(self._detection)
         automation.on_event(self._script_event)
@@ -40,6 +41,7 @@ class Api:
         app.router.add_get("/", self._index)
         app.router.add_get("/info", self._info)
         app.router.add_get("/events", self._event_stream)
+        app.router.add_post("/restart", self._restart)
         app.router.add_post("/train/{train}/speed/{speed}", self._set_speed)
         app.router.add_post(
             "/arduino/{arduino}/switch/{switch}/{position}",
@@ -74,6 +76,15 @@ class Api:
         )
         return web.Response(status=204)
 
+    async def _restart(self, _: web.Request) -> web.Response:
+        asyncio.get_running_loop().call_later(
+            0.2,
+            os.execv,
+            sys.executable,
+            [sys.executable, "-m", "backend"],
+        )
+        return web.Response(status=204)
+
     async def _event_stream(self, request: web.Request) -> web.StreamResponse:
         response = web.StreamResponse(headers={
             "Content-Type": "text/event-stream",
@@ -82,14 +93,14 @@ class Api:
             "X-Accel-Buffering": "no",
         })
         await response.prepare(request)
-        queue: asyncio.Queue[tuple[str, dict[str, object]]] = asyncio.Queue()
+        queue: asyncio.Queue[dict[str, str]] = asyncio.Queue()
         self._events.add(queue)
         try:
             while True:
                 try:
-                    name, event = await asyncio.wait_for(queue.get(), 15)
+                    event = await asyncio.wait_for(queue.get(), 15)
                     data = json.dumps(event, separators=(",", ":"))
-                    await response.write(f"event: {name}\ndata: {data}\n\n".encode())
+                    await response.write(f"data: {data}\n\n".encode())
                 except TimeoutError:
                     await response.write(b": ping\n\n")
         except (ConnectionError, RuntimeError):
@@ -105,17 +116,20 @@ class Api:
         tag: str,
         detected: bool,
     ) -> None:
-        event = {
-            "arduino": arduino,
-            "detector": detector,
-            "tag": tag,
-            "detected": detected,
-        }
-        self._publish("detector", event)
+        self._publish(
+            "nfc",
+            f"{arduino}/{detector} "
+            f"{'detected' if detected else 'removed'} {tag}",
+        )
 
     def _script_event(self, message: str) -> None:
-        self._publish("script", {"message": message})
+        self._publish("script", message)
 
-    def _publish(self, name: str, event: dict[str, object]) -> None:
+    def _publish(self, event_type: str, message: str) -> None:
+        event = {
+            "date": datetime.now(UTC).isoformat(),
+            "type": event_type,
+            "message": message,
+        }
         for queue in self._events:
-            queue.put_nowait((name, event))
+            queue.put_nowait(event)

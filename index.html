@@ -35,6 +35,14 @@
     }
     button:hover { background: #4a4a4a; }
     button.stop { background: #8b3030; }
+    input[type="number"] {
+      width: 64px;
+      border: 0;
+      border-radius: 8px;
+      padding: 9px;
+      background: #333;
+      color: #fff;
+    }
     .item { padding: 9px 0; border-top: 1px solid #333; }
     #events {
       min-height: 80px;
@@ -49,6 +57,7 @@
 <body>
   <h1>Space</h1>
   <div id="status">Connecting…</div>
+  <div id="backend-actions" class="row"></div>
 
   <h2>Trains</h2>
   <div id="trains" class="grid"></div>
@@ -60,14 +69,19 @@
   <div id="arduinos" class="grid"></div>
 
   <h2>Events</h2>
+  <div id="event-filters" class="row"></div>
   <div id="events" class="card"></div>
 
   <script>
     const trains = document.querySelector("#trains");
     const remotes = document.querySelector("#remotes");
     const arduinos = document.querySelector("#arduinos");
+    const eventFilters = document.querySelector("#event-filters");
     const events = document.querySelector("#events");
     const status = document.querySelector("#status");
+    const backendActions = document.querySelector("#backend-actions");
+    const eventTypes = {nfc: false, script: true};
+    const trainSpeeds = {};
 
     function element(tag, text, className) {
       const node = document.createElement(tag);
@@ -81,7 +95,10 @@
       button.onclick = async () => {
         button.disabled = true;
         try {
-          const response = await fetch(path, {method: "POST"});
+          const response = await fetch(
+            typeof path === "function" ? path() : path,
+            {method: "POST"}
+          );
           if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
         } catch (error) {
           status.textContent = error;
@@ -90,6 +107,27 @@
         }
       };
       return button;
+    }
+
+    backendActions.append(action("Restart backend", "/restart"));
+
+    function filterEvents() {
+      for (const event of events.children) {
+        event.hidden = !eventTypes[event.dataset.type];
+      }
+    }
+
+    for (const [type, enabled] of Object.entries(eventTypes)) {
+      const checkbox = element("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = enabled;
+      checkbox.onchange = () => {
+        eventTypes[type] = checkbox.checked;
+        filterEvents();
+      };
+      const label = element("label");
+      label.append(checkbox, ` ${type}`);
+      eventFilters.append(label);
     }
 
     function renderTrains(info) {
@@ -108,13 +146,20 @@
           "muted"
         ));
         const controls = element("div", undefined, "row");
-        for (const speed of [-100, -50, 0, 50, 100]) {
-          controls.append(action(
-            String(speed),
-            `/train/${encodeURIComponent(name)}/speed/${speed}`,
-            speed === 0 ? "stop" : ""
-          ));
-        }
+        const speed = element("input");
+        speed.type = "number";
+        speed.min = -100;
+        speed.max = 100;
+        speed.value = trainSpeeds[name] ?? 50;
+        speed.oninput = () => { trainSpeeds[name] = speed.value; };
+        controls.append(
+          speed,
+          action(
+            "Set",
+            () => `/train/${encodeURIComponent(name)}/speed/${speed.value}`
+          ),
+          action("STOP", `/train/${encodeURIComponent(name)}/speed/0`, "stop")
+        );
         card.append(controls);
         trains.append(card);
       }
@@ -187,26 +232,21 @@
       }
     }
 
-    const stream = new EventSource("/events");
-    stream.addEventListener("detector", message => {
-      const event = JSON.parse(message.data);
+    function addEvent(event) {
       const line = element(
         "div",
-        `${new Date().toLocaleTimeString()} ${event.arduino}/${event.detector} ` +
-          `${event.detected ? "detected" : "removed"} ${event.tag}`
+        `${new Date(event.date).toLocaleTimeString()} ${event.message}`
       );
+      line.dataset.type = event.type;
+      line.hidden = !eventTypes[event.type];
       events.prepend(line);
       while (events.children.length > 100) events.lastChild.remove();
-      refresh();
-    });
-    stream.addEventListener("script", message => {
-      const event = JSON.parse(message.data);
-      events.prepend(element(
-        "div",
-        `${new Date().toLocaleTimeString()} ${event.message}`
-      ));
-      while (events.children.length > 100) events.lastChild.remove();
-    });
+    }
+
+    const stream = new EventSource("/events");
+    stream.onmessage = message => {
+      addEvent(JSON.parse(message.data));
+    };
     stream.onerror = () => { status.textContent = "event stream reconnecting…"; };
 
     refresh();
