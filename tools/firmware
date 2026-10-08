@@ -52,6 +52,8 @@ def generated(config, device):
         f"constexpr char DEVICE_TYPE[] = {quoted(device)};",
         f"constexpr char WIFI_SSID[] = {quoted(config['wifi_ssid'])};",
         f"constexpr char WIFI_PASSWORD[] = {quoted(config['wifi_password'])};",
+        f"constexpr char BACKEND_HOST[] = {quoted(config['backend_host'])};",
+        f"constexpr uint16_t BACKEND_PORT = {config['backend_port']};",
         f"constexpr unsigned long RECONNECT_MS = {config['reconnect_ms']};",
         f"constexpr unsigned long SERIAL_BAUDRATE = {config['baudrate']};",
         f"constexpr bool DEVICE_LOGS = {str(config['logs']).lower()};",

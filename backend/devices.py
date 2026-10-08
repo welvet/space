@@ -1,54 +1,26 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import json
 import logging
 from collections.abc import Callable
-
-import ifaddr
-from zeroconf import IPVersion, ServiceInfo
-from zeroconf.asyncio import AsyncZeroconf
 
 
 class Devices:
     def __init__(self, config: dict[str, object]) -> None:
         self._host = config["host"]
         self._port = config["port"]
-        self._interface = config.get("interface")
         self._connections: dict[str, dict[str, object]] = {}
         self._callbacks: dict[str, Callable[[str], None]] = {}
         self._detection_callbacks: list[Callable[[str, str, bool], None]] = []
         self._server: asyncio.Server | None = None
-        self._discovery: AsyncZeroconf | None = None
         self._log = logging.getLogger("backend.devices")
 
     async def start(self) -> None:
         self._server = await asyncio.start_server(self._connect, self._host, self._port)
-        addresses = [
-            ip.ip
-            for adapter in ifaddr.get_adapters()
-            if self._interface is None or adapter.name == self._interface
-            for ip in adapter.ips
-            if ip.is_IPv4 and not ipaddress.ip_address(ip.ip).is_loopback
-            and (self._host == "0.0.0.0" or self._host == ip.ip)
-        ]
-        if not addresses:
-            raise RuntimeError("Device listener needs a LAN IPv4 address")
-        self._discovery = AsyncZeroconf(interfaces=addresses, ip_version=IPVersion.V4Only)
-        service = ServiceInfo(
-            "_space._tcp.local.",
-            "Space._space._tcp.local.",
-            parsed_addresses=addresses,
-            port=self._server.sockets[0].getsockname()[1],
-            server="space-backend.local.",
-        )
-        await self._discovery.async_register_service(service)
-        self._log.info("Listening for devices on %s:%s", self._host, service.port)
+        self._log.info("Listening for devices on %s:%s", self._host, self._port)
 
     async def stop(self) -> None:
-        if self._discovery is not None:
-            await self._discovery.async_close()
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
