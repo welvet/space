@@ -41,10 +41,6 @@ class Connection {
     message["detector"] = READERS[reader].id;
     message["tag_id"] = tag;
     send(message);
-
-    Serial.print(READERS[reader].id);
-    Serial.print(detected ? " detected " : " removed ");
-    Serial.println(tag);
   }
 
  private:
@@ -65,7 +61,6 @@ class Connection {
     const bool connected = WiFi.status() == WL_CONNECTED;
     if (connected != wifiConnected_) {
       wifiConnected_ = connected;
-      Serial.println(connected ? "wifi connected" : "wifi disconnected");
       if (connected) connectBackend();
       else disconnectBackend();
     }
@@ -83,7 +78,6 @@ class Connection {
   void updateBackend() {
     if (backendConnected_ && !client_.connected()) {
       backendConnected_ = false;
-      Serial.println("backend disconnected");
     }
     if (!wifiConnected_ || backendConnected_) return;
     if (millis() - lastBackendAttempt_ >= RECONNECT_MS) connectBackend();
@@ -93,13 +87,11 @@ class Connection {
     lastBackendAttempt_ = millis();
     if (!wifiConnected_ || !client_.connect(BACKEND_HOST, BACKEND_PORT)) return;
     backendConnected_ = true;
-    Serial.println("backend connected");
     sendHello();
   }
 
   void disconnectBackend() {
     client_.stop();
-    if (backendConnected_) Serial.println("backend disconnected");
     backendConnected_ = false;
     lineLength_ = 0;
     lineOverflowed_ = false;

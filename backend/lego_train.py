@@ -25,6 +25,7 @@ class LegoTrain:
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._battery: dict[str, int] = {}
         self._voltage: dict[str, float] = {}
+        self._speed = {train: 0 for train in self._trains}
         self._log = logging.getLogger("backend.lego_train")
 
     async def start(self) -> None:
@@ -40,6 +41,10 @@ class LegoTrain:
         command = bytes([0x06, 0x00, 0x81, 0x01, 0x11, 0x51, 0x00])
         command += struct.pack("b", speed)
         await self._clients[train].write_gatt_char(HUB_CHARACTERISTIC_UUID, command)
+        self._speed[train] = speed
+
+    def getSpeed(self, train: str) -> int:
+        return self._speed[train]
 
     def info(self) -> dict[str, dict[str, object]]:
         return {
@@ -49,6 +54,7 @@ class LegoTrain:
                     (client := self._clients.get(train)) is not None
                     and client.is_connected
                 ),
+                "speed": self._speed[train],
                 "battery_percent": self._battery.get(train),
                 "voltage": self._voltage.get(train),
             }

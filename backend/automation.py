@@ -58,6 +58,9 @@ class Automation:
     async def setSpeed(self, train: str, speed: int) -> None:
         await self._train.setSpeed(train, speed)
 
+    def getSpeed(self, train: str) -> int:
+        return self._train.getSpeed(train)
+
     async def setSwitch(
         self,
         arduino: str,

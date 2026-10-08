@@ -33,9 +33,6 @@ class Readers {
       devices_[index]->begin();
       ready_[index] =
           devices_[index]->getFirmwareVersion() != 0 && devices_[index]->SAMConfig();
-      Serial.print("reader ");
-      Serial.print(READERS[index].id);
-      Serial.println(ready_[index] ? " ready" : " unavailable");
       if (ready_[index]) scan(index, false);
     }
   }

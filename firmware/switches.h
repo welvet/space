@@ -32,10 +32,6 @@ class Switches {
       servos_[index].write(angle);
       active_[index] = true;
       startedAt_[index] = millis();
-      Serial.print("switch ");
-      Serial.print(id);
-      Serial.print(" -> ");
-      Serial.println(position);
       return;
     }
   }

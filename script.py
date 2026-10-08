@@ -2,7 +2,7 @@ import asyncio
 
 from backend import Automation
 
-WAIT_TIME = 2.5
+WAIT_TIME = 1.5
 TRAIN_SPEED = 60
 
 
@@ -24,4 +24,15 @@ class Script(Automation):
             await self.setSwitch("A_HUB_1", "S1", "straight")
 
     async def on_button(self, remote: str, button: str) -> None:
-        pass
+        if remote != "Handset":
+            return
+
+        side, action = button.split("_")
+        train = "arctic_express" if side == "left" else "steam_train"
+        if action == "stop":
+            speed = 0
+        else:
+            step = 20 if action == "plus" else -20
+            speed = max(-100, min(100, self.getSpeed(train) + step))
+        await self.setSpeed(train, speed)
+        self.event(f"{train} speed changed to {speed}")

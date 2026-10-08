@@ -1,6 +1,10 @@
+#include <Arduino_FreeRTOS.h>
+
 #include "connection.h"
 #include "readers.h"
 #include "switches.h"
+
+AUTOSTART_FREERTOS
 
 void tagChanged(
     int reader,
@@ -12,16 +16,26 @@ space::Switches switches;
 space::Readers readers(tagChanged);
 space::Connection connection(switches, readers);
 
+void detectorLoop(void*) {
+  for (;;) readers.loop();
+}
+
 void setup() {
-  Serial.begin(SERIAL_BAUDRATE);
   readers.setup();
   connection.setup();
+  xTaskCreate(
+      detectorLoop,
+      "Detectors",
+      1024 / 4,
+      nullptr,
+      4,
+      nullptr);
 }
 
 void loop() {
   connection.loop();
   switches.loop();
-  readers.loop();
+  taskYIELD();
 }
 
 void tagChanged(
