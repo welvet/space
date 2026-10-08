@@ -15,6 +15,7 @@ class Devices:
     def __init__(self, config: dict[str, object]) -> None:
         self._host = config["host"]
         self._port = config["port"]
+        self._interface = config.get("interface")
         self._connections: dict[str, dict[str, object]] = {}
         self._callbacks: dict[str, Callable[[str], None]] = {}
         self._detection_callbacks: list[Callable[[str, str, bool], None]] = []
@@ -27,6 +28,7 @@ class Devices:
         addresses = [
             ip.ip
             for adapter in ifaddr.get_adapters()
+            if self._interface is None or adapter.name == self._interface
             for ip in adapter.ips
             if ip.is_IPv4 and not ipaddress.ip_address(ip.ip).is_loopback
             and (self._host == "0.0.0.0" or self._host == ip.ip)
@@ -76,7 +78,10 @@ class Devices:
     async def _connect(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         device = None
         try:
-            while line := await reader.readline():
+            while True:
+                line = await asyncio.wait_for(reader.readline(), timeout=15)
+                if not line:
+                    break
                 message = json.loads(line)
                 if not isinstance(message, dict):
                     break
@@ -109,7 +114,12 @@ class Devices:
                     if self._connections.get(device, {}).get("writer") is not writer:
                         break
                     self._state(device, message)
-        except (ConnectionError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                elif event == "ping" and device is not None:
+                    if self._connections.get(device, {}).get("writer") is not writer:
+                        break
+                    writer.write(b'{"event":"pong"}\n')
+                    await asyncio.wait_for(writer.drain(), timeout=15)
+        except (ConnectionError, TimeoutError, json.JSONDecodeError, KeyError, TypeError, ValueError):
             pass
         finally:
             if device is not None and self._connections.get(device, {}).get("writer") is writer:

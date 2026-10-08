@@ -12,6 +12,7 @@ inline void publishReader(bool ready, bool present, const char* tag, uint32_t& s
   message["ready"] = ready;
   if (present) message["tag_id"] = tag;
   else message["tag_id"] = nullptr;
+  if (DEVICE_LOGS) Serial.printf("[nfc] ready=%d tag=%s\n", ready, present ? tag : "empty");
   publishState(message, sequence);
 }
 
@@ -30,6 +31,7 @@ inline void deviceTask(void*) {
       ready = reader.getFirmwareVersion() != 0 && reader.SAMConfig() &&
           reader.setPassiveActivationRetries(0x01);
       if (!ready) {
+        if (DEVICE_LOGS) Serial.println("[nfc] initialization failed");
         vTaskDelay(pdMS_TO_TICKS(1000));
         continue;
       }

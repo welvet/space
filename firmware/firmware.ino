@@ -7,6 +7,8 @@ QueueHandle_t commands;
 Connection connection;
 
 void setup() {
+  Serial.begin(SERIAL_BAUDRATE);
+  if (DEVICE_LOGS) Serial.printf("[boot] %s\n", DEVICE_TYPE);
   events = xQueueCreate(32, sizeof(DeviceState));
   state = xQueueCreate(1, sizeof(DeviceState));
   commands = xQueueCreate(8, sizeof(DeviceCommand));
