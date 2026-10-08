@@ -1,4 +1,5 @@
 arduino.json
+firmware.json
 backend.json
 .venv/
 *.egg-info/

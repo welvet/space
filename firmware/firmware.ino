@@ -1,47 +1,24 @@
-#include <Arduino_FreeRTOS.h>
-
 #include "connection.h"
-#include "readers.h"
-#include "switches.h"
+#include "selected_task.h"
 
-AUTOSTART_FREERTOS
-
-void tagChanged(
-    int reader,
-    bool detected,
-    const uint8_t* uid,
-    uint8_t uidLength);
-
-space::Switches switches;
-space::Readers readers(tagChanged);
-space::Connection connection(switches, readers);
-
-void detectorLoop(void*) {
-  for (;;) readers.loop();
-}
+QueueHandle_t events;
+QueueHandle_t state;
+QueueHandle_t commands;
+Connection connection;
 
 void setup() {
-  readers.setup();
+  events = xQueueCreate(32, sizeof(DeviceState));
+  state = xQueueCreate(1, sizeof(DeviceState));
+  commands = xQueueCreate(8, sizeof(DeviceCommand));
+  if (!events || !state || !commands) abort();
+  DeviceState initial = {};
+  strcpy(initial.payload, "{\"ready\":false}");
+  xQueueOverwrite(state, &initial);
+  if (xTaskCreate(deviceTask, "Device", 4096, nullptr, 1, nullptr) != pdPASS) abort();
   connection.setup();
-  xTaskCreate(
-      detectorLoop,
-      "Detectors",
-      1024 / 4,
-      nullptr,
-      4,
-      nullptr);
 }
 
 void loop() {
   connection.loop();
-  switches.loop();
-  taskYIELD();
-}
-
-void tagChanged(
-    int reader,
-    bool detected,
-    const uint8_t* uid,
-    uint8_t uidLength) {
-  connection.sendTag(reader, detected, uid, uidLength);
+  delay(1);
 }

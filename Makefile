@@ -1,15 +1,17 @@
 .DEFAULT_GOAL := help
 
+device ?=
+
 .PHONY: help compile install monitor backend scan-ble
 
 compile:
-	./tools/arduino compile
+	./tools/firmware compile $(if $(device),--device "$(device)")
 
 install:
-	./tools/arduino install
+	./tools/firmware install $(if $(device),--device "$(device)")
 
 monitor:
-	./tools/arduino monitor
+	./tools/firmware monitor
 
 backend:
 	@test -d .venv || python3 -m venv .venv

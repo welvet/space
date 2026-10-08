@@ -9,7 +9,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-from .arduino import Arduino
+from .devices import Devices
 from .automation import Automation
 from .lego_remote import LegoRemote
 from .lego_train import LegoTrain
@@ -23,17 +23,17 @@ class Api:
         config: dict[str, object],
         train: LegoTrain,
         remote: LegoRemote,
-        arduino: Arduino,
+        devices: Devices,
         automation: Automation,
     ) -> None:
         self._host = config["host"]
         self._port = config["port"]
         self._train = train
         self._remote = remote
-        self._arduino = arduino
+        self._devices = devices
         self._events: set[asyncio.Queue[dict[str, str]]] = set()
         self._runner: web.AppRunner | None = None
-        arduino.on_detection(self._detection)
+        devices.on_detection(self._detection)
         automation.on_event(self._script_event)
 
     async def start(self) -> None:
@@ -44,7 +44,7 @@ class Api:
         app.router.add_post("/restart", self._restart)
         app.router.add_post("/train/{train}/speed/{speed}", self._set_speed)
         app.router.add_post(
-            "/arduino/{arduino}/switch/{switch}/{position}",
+            "/device/{device}/switch/{position}",
             self._set_switch,
         )
         self._runner = web.AppRunner(app)
@@ -58,7 +58,7 @@ class Api:
         return web.json_response({
             "trains": self._train.info(),
             "remotes": self._remote.info(),
-            "arduinos": self._arduino.info(),
+            "devices": self._devices.info(),
         })
 
     async def _set_speed(self, request: web.Request) -> web.Response:
@@ -69,9 +69,8 @@ class Api:
         return web.Response(status=204)
 
     async def _set_switch(self, request: web.Request) -> web.Response:
-        await self._arduino.setSwitch(
-            request.match_info["arduino"],
-            request.match_info["switch"],
+        await self._devices.setSwitch(
+            request.match_info["device"],
             request.match_info["position"],
         )
         return web.Response(status=204)
@@ -111,14 +110,13 @@ class Api:
 
     def _detection(
         self,
-        arduino: str,
-        detector: str,
+        device: str,
         tag: str,
         detected: bool,
     ) -> None:
         self._publish(
             "nfc",
-            f"{arduino}/{detector} "
+            f"{device} "
             f"{'detected' if detected else 'removed'} {tag}",
         )
 

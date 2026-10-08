@@ -5,6 +5,8 @@ requires-python = ">=3.11"
 dependencies = [
     "aiohttp>=3.9",
     "bleak>=0.21",
+    "zeroconf>=0.151.0",
+    "ifaddr>=0.2.0",
 ]
 
 [tool.setuptools.packages.find]

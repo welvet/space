@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 
-from .arduino import Arduino
+from .devices import Devices
 from .lego_remote import LegoRemote
 from .lego_train import LegoTrain
 
@@ -13,11 +13,11 @@ class Automation:
         self,
         trains: dict[str, dict[str, object]],
         train: LegoTrain,
-        arduino: Arduino,
+        devices: Devices,
         remote: LegoRemote,
     ) -> None:
         self._train = train
-        self._arduino = arduino
+        self._devices = devices
         self._trains_by_tag = {
             self._normalize(tag): train
             for train, config in trains.items()
@@ -45,14 +45,12 @@ class Automation:
 
     def on_detector(
         self,
-        arduino: str,
-        detector: str,
+        device: str,
         cooldown: float = 2,
     ) -> None:
-        self._arduino.on_detector(
-            arduino,
-            detector,
-            lambda tag: asyncio.create_task(self._detected(tag, detector, cooldown)),
+        self._devices.on_detector(
+            device,
+            lambda tag: asyncio.create_task(self._detected(tag, device, cooldown)),
         )
 
     async def setSpeed(self, train: str, speed: int) -> None:
@@ -63,11 +61,10 @@ class Automation:
 
     async def setSwitch(
         self,
-        arduino: str,
-        switch: str,
+        device: str,
         position: str,
     ) -> None:
-        await self._arduino.setSwitch(arduino, switch, position)
+        await self._devices.setSwitch(device, position)
 
     def _on_button(self, remote: str, button: str) -> None:
         asyncio.create_task(self.on_button(remote, button))

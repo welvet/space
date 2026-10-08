@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+FIRMWARE = ROOT / "firmware"
+
+
+def config():
+    return json.loads((ROOT / "firmware.json").read_text())
+
+
+def port(board):
+    if board["port"] != "auto":
+        return board["port"]
+    result = subprocess.run(
+        ["arduino-cli", "board", "list", "--format", "json"],
+        check=True, capture_output=True, text=True,
+    )
+    matches = []
+    for detected in json.loads(result.stdout).get("detected_ports", []):
+        candidate = detected["port"]
+        properties = candidate.get("properties", {})
+        if (
+            properties.get("vid", "").lower() == board["usb_vid"].lower()
+            and properties.get("pid", "").lower() == board["usb_pid"].lower()
+        ):
+            matches.append(candidate["address"])
+    if not matches:
+        raise SystemExit("No matching USB board connected")
+    if len(matches) > 1:
+        raise SystemExit(
+            "Multiple matching boards: " + ", ".join(matches)
+            + ". Set this board profile's port in firmware.json."
+        )
+    return matches[0]
+
+
+def quoted(value):
+    return json.dumps(value)
+
+
+def generated(config, device):
+    profile = config["devices"][device]
+    lines = [
+        "#pragma once",
+        f"constexpr char DEVICE_TYPE[] = {quoted(device)};",
+        f"constexpr char WIFI_SSID[] = {quoted(config['wifi_ssid'])};",
+        f"constexpr char WIFI_PASSWORD[] = {quoted(config['wifi_password'])};",
+        f"constexpr unsigned long RECONNECT_MS = {config['reconnect_ms']};",
+    ]
+    if profile["task"] == "reader":
+        lines += [
+            f"constexpr uint16_t READ_TIMEOUT_MS = {profile['read_timeout_ms']};",
+            f"constexpr unsigned long REMOVAL_DELAY_MS = {profile['removal_delay_ms']};",
+        ]
+    elif profile["task"] == "motor":
+        lines += [f"constexpr int MOTOR_PIN = {profile['pin']};"]
+    else:
+        raise SystemExit(f"Unknown task: {profile['task']}")
+    return "\n".join(lines + [""])
+
+
+def sketch(config, device, directory):
+    profile = config["devices"][device]
+    task = profile["task"]
+    header = generated(config, device)
+    path = Path(directory) / "firmware"
+    path.mkdir()
+    for name in ("firmware.ino", "connection.h", "device.h", f"{task}.h"):
+        shutil.copy2(FIRMWARE / name, path / name)
+    (path / "generated_config.h").write_text(header)
+    (path / "selected_task.h").write_text(f'#include "{task}.h"\n')
+    return path
+
+
+def run(command):
+    print("→", " ".join(map(str, command)), flush=True)
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as error:
+        raise SystemExit(error.returncode) from None
+
+
+def build(device, upload=False):
+    settings = config()
+    device = device or settings["device"]
+    if device not in settings["devices"]:
+        raise SystemExit(f"Unknown device type: {device}")
+    board = settings["boards"][settings["board"]]
+    upload_port = port(board) if upload else None
+    with tempfile.TemporaryDirectory(prefix="space-firmware-") as directory:
+        path = sketch(settings, device, directory)
+        run(["arduino-cli", "compile", "--fqbn", board["fqbn"], path])
+        if upload:
+            run([
+                "arduino-cli",
+                "upload",
+                "-p",
+                upload_port,
+                "--fqbn",
+                board["fqbn"],
+                path,
+            ])
+
+
+def monitor():
+    settings = config()
+    board = settings["boards"][settings["board"]]
+    run([
+        "arduino-cli",
+        "monitor",
+        "-p",
+        port(board),
+        "--config",
+        f"baudrate={settings['baudrate']}",
+    ])
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("command", choices=("compile", "install", "monitor"))
+parser.add_argument("--device")
+args = parser.parse_args()
+command = args.command
+if command == "compile":
+    build(args.device)
+elif command == "install":
+    build(args.device, upload=True)
+else:
+    monitor()

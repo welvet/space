@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from .api import Api
-from .arduino import Arduino
+from .devices import Devices
 from .lego_remote import LegoRemote
 from .lego_train import LegoTrain
 from script import Script
@@ -23,15 +23,18 @@ async def run() -> None:
         for train, details in trains.items()
     })
     remote = LegoRemote(json.loads(REMOTE_CONFIG.read_text()))
-    arduino = Arduino(config["arduino"])
-    automation = Script(trains, lego_train, arduino, remote)
-    api = Api(config["api"], lego_train, remote, arduino, automation)
-    await lego_train.start()
-    await remote.start()
-    await arduino.start()
-    await api.start()
-    await automation.start()
-    await asyncio.Event().wait()
+    devices = Devices(config["devices"])
+    automation = Script(trains, lego_train, devices, remote)
+    api = Api(config["api"], lego_train, remote, devices, automation)
+    try:
+        await devices.start()
+        await lego_train.start()
+        await remote.start()
+        await api.start()
+        await automation.start()
+        await asyncio.Event().wait()
+    finally:
+        await devices.stop()
 
 
 def main() -> None:

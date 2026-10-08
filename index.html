@@ -65,8 +65,8 @@
   <h2>Remotes</h2>
   <div id="remotes" class="grid"></div>
 
-  <h2>Arduinos</h2>
-  <div id="arduinos" class="grid"></div>
+  <h2>Devices</h2>
+  <div id="devices" class="grid"></div>
 
   <h2>Events</h2>
   <div id="event-filters" class="row"></div>
@@ -75,7 +75,7 @@
   <script>
     const trains = document.querySelector("#trains");
     const remotes = document.querySelector("#remotes");
-    const arduinos = document.querySelector("#arduinos");
+    const devices = document.querySelector("#devices");
     const eventFilters = document.querySelector("#event-filters");
     const events = document.querySelector("#events");
     const status = document.querySelector("#status");
@@ -165,37 +165,20 @@
       }
     }
 
-    function renderArduinos(info) {
-      arduinos.replaceChildren();
-      for (const [name, arduino] of Object.entries(info)) {
+    function renderDevices(info) {
+      devices.replaceChildren();
+      for (const [name, device] of Object.entries(info)) {
         const card = element("section", undefined, "card");
         card.append(element("h3", name));
-
-        for (const switchName of arduino.switches) {
-          const item = element("div", undefined, "item");
-          item.append(element("strong", `Switch ${switchName}`));
-          const controls = element("div", undefined, "row");
-          controls.append(action(
-            "Straight",
-            `/arduino/${encodeURIComponent(name)}/switch/${encodeURIComponent(switchName)}/straight`
-          ));
-          controls.append(action(
-            "Side",
-            `/arduino/${encodeURIComponent(name)}/switch/${encodeURIComponent(switchName)}/side`
-          ));
-          item.append(controls);
-          card.append(item);
+        card.append(element("div", device.type, "item"));
+        card.append(element("div", device.ready ? "Ready" : "Unavailable", "item"));
+        if (device.type === "NFC_READER") {
+          card.append(element("div", device.tag_id ?? "empty", "item"));
         }
-
-        for (const detector of arduino.detectors) {
-          const tag = arduino.detected[detector];
-          card.append(element(
-            "div",
-            `${detector}: ${tag ?? "empty"}`,
-            "item"
-          ));
+        if (device.error) {
+          card.append(element("div", device.error, "item"));
         }
-        arduinos.append(card);
+        devices.append(card);
       }
     }
 
@@ -225,7 +208,7 @@
         const info = await response.json();
         renderTrains(info.trains);
         renderRemotes(info.remotes);
-        renderArduinos(info.arduinos);
+        renderDevices(info.devices);
         status.textContent = "online";
       } catch (error) {
         status.textContent = error;

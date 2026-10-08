@@ -1,180 +1,128 @@
-#ifndef SPACE_CONNECTION_H
-#define SPACE_CONNECTION_H
+#pragma once
 
-#include <Arduino.h>
 #include <ArduinoJson.h>
-#include <WiFiS3.h>
-#include <string.h>
+#include <ESPmDNS.h>
+#include <WiFi.h>
+#include <esp_mac.h>
 
+#include "device.h"
 #include "generated_config.h"
-#include "readers.h"
-#include "switches.h"
-
-namespace space {
 
 class Connection {
  public:
-  Connection(Switches& switches, Readers& readers)
-      : switches_(switches), readers_(readers) {}
-
   void setup() {
-    connectWifi();
-  }
-
-  void loop() {
-    updateWifi();
-    updateBackend();
-    readCommands();
-  }
-
-  void sendTag(
-      int reader,
-      bool detected,
-      const uint8_t* uid,
-      uint8_t uidLength) {
-    char tag[3 * 7] = {0};
-    formatUid(uid, uidLength, tag, sizeof(tag));
-
-    JsonDocument message;
-    message["event"] = detected ? "tag_detected" : "tag_removed";
-    message["hub"] = HUB_ID;
-    message["detector"] = READERS[reader].id;
-    message["tag_id"] = tag;
-    send(message);
-  }
-
- private:
-  static constexpr size_t kLineSize = 256;
-
-  Switches& switches_;
-  Readers& readers_;
-  WiFiClient client_;
-  bool wifiConnected_ = false;
-  bool backendConnected_ = false;
-  unsigned long lastWifiAttempt_ = 0;
-  unsigned long lastBackendAttempt_ = 0;
-  char line_[kLineSize] = {0};
-  size_t lineLength_ = 0;
-  bool lineOverflowed_ = false;
-
-  void updateWifi() {
-    const bool connected = WiFi.status() == WL_CONNECTED;
-    if (connected != wifiConnected_) {
-      wifiConnected_ = connected;
-      if (connected) connectBackend();
-      else disconnectBackend();
-    }
-
-    if (!connected && millis() - lastWifiAttempt_ >= RECONNECT_MS) {
-      connectWifi();
-    }
-  }
-
-  void connectWifi() {
-    lastWifiAttempt_ = millis();
+    uint8_t mac[6];
+    if (esp_efuse_mac_get_default(mac) != ESP_OK) abort();
+    snprintf(deviceId_, sizeof(deviceId_), "%s_%02X%02X%02X%02X%02X%02X",
+        DEVICE_TYPE, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    hostname_ = deviceId_;
+    hostname_.replace("_", "-");
+    hostname_.toLowerCase();
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   }
 
-  void updateBackend() {
-    if (backendConnected_ && !client_.connected()) {
-      backendConnected_ = false;
+  void loop() {
+    if (WiFi.status() != WL_CONNECTED) {
+      client_.stop();
+      if (mdnsReady_) MDNS.end();
+      mdnsReady_ = false;
+      connected_ = false;
+      clearCommands();
+      discardEvents();
+      return;
     }
-    if (!wifiConnected_ || backendConnected_) return;
-    if (millis() - lastBackendAttempt_ >= RECONNECT_MS) connectBackend();
+    if (!mdnsReady_) mdnsReady_ = MDNS.begin(hostname_);
+    if (!client_.connected()) {
+      client_.stop();
+      connected_ = false;
+      clearCommands();
+      discardEvents();
+      if (!mdnsReady_ || millis() - lastAttempt_ < RECONNECT_MS) return;
+      lastAttempt_ = millis();
+      const int count = MDNS.queryService("space", "tcp");
+      for (int i = 0; i < count; ++i) {
+        if (client_.connect(MDNS.address(i), MDNS.port(i), 1000)) break;
+      }
+      if (!client_.connected()) return;
+      connected_ = true;
+      DeviceState current = {};
+      xQueuePeek(state, &current, 0);
+      lastSequence_ = current.sequence;
+      JsonDocument hello;
+      deserializeJson(hello, current.payload);
+      hello["event"] = "hello";
+      hello["device"] = deviceId_;
+      hello["type"] = DEVICE_TYPE;
+      send(hello);
+    }
+
+    readCommands();
+    DeviceState event;
+    while (connected_ && xQueueReceive(events, &event, 0) == pdTRUE) {
+      if (event.sequence <= lastSequence_) continue;
+      lastSequence_ = event.sequence;
+      JsonDocument message;
+      deserializeJson(message, event.payload);
+      message["event"] = "state";
+      message["device"] = deviceId_;
+      send(message);
+    }
   }
 
-  void connectBackend() {
-    lastBackendAttempt_ = millis();
-    if (!wifiConnected_ || !client_.connect(BACKEND_HOST, BACKEND_PORT)) return;
-    backendConnected_ = true;
-    sendHello();
-  }
+ private:
+  char deviceId_[sizeof(DEVICE_TYPE) + 13] = {};
+  String hostname_;
+  WiFiClient client_;
+  bool mdnsReady_ = false;
+  bool connected_ = false;
+  unsigned long lastAttempt_ = 0;
+  uint32_t lastSequence_ = 0;
+  DeviceCommand command_ = {};
+  size_t lineLength_ = 0;
 
-  void disconnectBackend() {
-    client_.stop();
-    backendConnected_ = false;
+  void clearCommands() {
     lineLength_ = 0;
-    lineOverflowed_ = false;
+    DeviceCommand discarded;
+    while (xQueueReceive(commands, &discarded, 0) == pdTRUE) {}
   }
 
   void readCommands() {
-    while (client_.available()) {
+    while (connected_ && client_.available()) {
       const char value = client_.read();
       if (value == '\n') {
-        if (!lineOverflowed_ && lineLength_ > 0) {
-          line_[lineLength_] = '\0';
-          handle(line_);
+        command_.payload[lineLength_] = '\0';
+        JsonDocument message;
+        if (!deserializeJson(message, command_.payload) && message["cmd"].is<const char*>()) {
+          if (xQueueSend(commands, &command_, 0) != pdTRUE) {
+            client_.stop();
+            connected_ = false;
+          }
         }
         lineLength_ = 0;
-        lineOverflowed_ = false;
-      } else if (!lineOverflowed_ && lineLength_ < kLineSize - 1) {
-        line_[lineLength_++] = value;
+      } else if (lineLength_ < sizeof(command_.payload) - 1) {
+        command_.payload[lineLength_++] = value;
       } else {
+        client_.stop();
+        connected_ = false;
         lineLength_ = 0;
-        lineOverflowed_ = true;
       }
     }
   }
 
-  void handle(const char* line) {
-    JsonDocument message;
-    if (deserializeJson(message, line)) return;
-    if (strcmp(message["cmd"] | "", "move") != 0) return;
-    const char* id = message["switch"];
-    const char* position = message["position"];
-    if (id != nullptr && position != nullptr) switches_.move(id, position);
-  }
-
-  void sendHello() {
-    JsonDocument message;
-    message["event"] = "hello";
-    message["hub"] = HUB_ID;
-
-    JsonArray switches = message["switches"].to<JsonArray>();
-    for (int index = 0; index < SWITCH_COUNT; ++index) {
-      switches.add(SWITCHES[index].id);
-    }
-
-    JsonArray detectors = message["detectors"].to<JsonArray>();
-    JsonArray detectedTags = message["detected_tags"].to<JsonArray>();
-    for (int index = 0; index < READER_COUNT; ++index) {
-      if (!readers_.ready(index)) continue;
-      detectors.add(READERS[index].id);
-      if (!readers_.present(index)) continue;
-
-      char tag[3 * 7] = {0};
-      formatUid(
-          readers_.uid(index),
-          readers_.uidLength(index),
-          tag,
-          sizeof(tag));
-      JsonObject detected = detectedTags.add<JsonObject>();
-      detected["detector"] = READERS[index].id;
-      detected["tag_id"] = tag;
-    }
-    send(message);
+  void discardEvents() {
+    DeviceState discarded;
+    while (xQueueReceive(events, &discarded, 0) == pdTRUE) {}
   }
 
   void send(JsonDocument& message) {
-    if (!client_.connected()) return;
-    serializeJson(message, client_);
-    client_.println();
-  }
-
-  static void formatUid(
-      const uint8_t* uid,
-      uint8_t uidLength,
-      char* output,
-      size_t size) {
-    size_t offset = 0;
-    for (uint8_t index = 0; index < uidLength && offset + 3 < size; ++index) {
-      if (index > 0) output[offset++] = ':';
-      offset += snprintf(output + offset, size - offset, "%02X", uid[index]);
+    char line[384];
+    const size_t size = serializeJson(message, line, sizeof(line) - 1);
+    line[size] = '\n';
+    if (client_.write(reinterpret_cast<const uint8_t*>(line), size + 1) != size + 1) {
+      client_.stop();
+      connected_ = false;
     }
-    output[offset] = '\0';
   }
 };
-
-}  // namespace space
-
-#endif
