@@ -42,6 +42,7 @@ inline void deviceTask(void*) {
     uint8_t length = 0;
     const bool found = reader.readPassiveTargetID(
         PN532_MIFARE_ISO14443A, uid, &length, READ_TIMEOUT_MS);
+    readerPolls.fetch_add(1, std::memory_order_relaxed);
     bool nextPresent = present;
     char nextTag[21];
     strcpy(nextTag, tag);

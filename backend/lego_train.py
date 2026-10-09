@@ -7,6 +7,7 @@ from contextlib import suppress
 from typing import Mapping
 
 from bleak import BleakClient
+from bleak.exc import BleakDeviceNotFoundError
 
 HUB_CHARACTERISTIC_UUID = "00001624-1212-efde-1623-785feabcd123"
 VOLTAGE_PORT = 0x3C
@@ -73,6 +74,8 @@ class LegoTrain:
                     await asyncio.sleep(1)
             except asyncio.CancelledError:
                 raise
+            except BleakDeviceNotFoundError:
+                pass
             except Exception as error:
                 self._log.warning("%s: %s", train, error)
             finally:

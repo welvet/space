@@ -14,8 +14,7 @@ monitor:
 	./tools/firmware monitor
 
 backend:
-	@test -d .venv || python3 -m venv .venv
-	@. .venv/bin/activate && pip install --quiet -e . && python -m backend
+	@.venv/bin/python -m backend
 
 scan-ble:
 	@test -d .venv || python3 -m venv .venv

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from aiohttp import web
+from aiohttp.web_log import AccessLogger
 
 from .devices import Devices
 from .automation import Automation
@@ -15,6 +16,12 @@ from .lego_remote import LegoRemote
 from .lego_train import LegoTrain
 
 INDEX = Path(__file__).resolve().parents[1] / "index.html"
+
+
+class ApiAccessLogger(AccessLogger):
+    def log(self, request, response, time):
+        if request.path != "/info":
+            super().log(request, response, time)
 
 
 class Api:
@@ -47,7 +54,7 @@ class Api:
             "/device/{device}/switch/{position}",
             self._set_switch,
         )
-        self._runner = web.AppRunner(app)
+        self._runner = web.AppRunner(app, access_log_class=ApiAccessLogger)
         await self._runner.setup()
         await web.TCPSite(self._runner, self._host, self._port).start()
 

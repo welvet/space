@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <atomic>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
@@ -17,6 +18,7 @@ struct DeviceCommand {
 extern QueueHandle_t events;
 extern QueueHandle_t state;
 extern QueueHandle_t commands;
+extern std::atomic<uint32_t> readerPolls;
 
 inline void publishState(JsonDocument& message, uint32_t& sequence) {
   DeviceState current = {};

@@ -22,9 +22,11 @@ GPIO5 is a boot-strapping pin; the reader must not force an incorrect level at b
 ## Power
 
 - Battery: 6 AAA cells in series, approximately 9 V nominal.
+- Buck converter: Hailege 5Pcs 3A DC-DC Step Down Buck Power Regulator Power Conversion Module 24V to 12V 5V 3V Adjustable.
 - Buck converter output: 5.02 V.
 - Buck OUT+ → ESP32 5V/VIN and PN532 VCC.
 - Buck OUT− → ESP32 GND and PN532 GND.
+- Bulk capacitor: 1000 µF, 16 V electrolytic, across ESP32 5V/VIN (+) and GND (−), with short leads.
 - ESP32 GPIO logic is 3.3 V and is not 5 V tolerant.
 - Avoid simultaneous USB and external 5 V until the board's power circuitry is verified.
 
