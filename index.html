@@ -81,7 +81,7 @@
     const status = document.querySelector("#status");
     const backendActions = document.querySelector("#backend-actions");
     const eventTypes = {nfc: false, script: true};
-    const trainSpeeds = {};
+    const trainCards = new Map();
 
     function element(tag, text, className) {
       const node = document.createElement(tag);
@@ -131,37 +131,42 @@
     }
 
     function renderTrains(info) {
-      trains.replaceChildren();
+      for (const [name, view] of trainCards) {
+        if (!(name in info)) {
+          view.card.remove();
+          trainCards.delete(name);
+        }
+      }
       for (const [name, train] of Object.entries(info)) {
-        const card = element("section", undefined, "card");
-        card.append(element("h3", name));
-        card.append(element(
-          "div",
-          train.connected ? "connected" : "disconnected",
-          train.connected ? "connected" : "disconnected"
-        ));
-        card.append(element(
-          "div",
-          `battery ${train.battery_percent ?? "–"}% · ${train.voltage ?? "–"} V`,
-          "muted"
-        ));
-        const controls = element("div", undefined, "row");
-        const speed = element("input");
-        speed.type = "number";
-        speed.min = -100;
-        speed.max = 100;
-        speed.value = trainSpeeds[name] ?? 50;
-        speed.oninput = () => { trainSpeeds[name] = speed.value; };
-        controls.append(
-          speed,
-          action(
-            "Set",
-            () => `/train/${encodeURIComponent(name)}/speed/${speed.value}`
-          ),
-          action("STOP", `/train/${encodeURIComponent(name)}/speed/0`, "stop")
-        );
-        card.append(controls);
-        trains.append(card);
+        let view = trainCards.get(name);
+        if (!view) {
+          const card = element("section", undefined, "card");
+          card.append(element("h3", name));
+          const connection = element("div");
+          const battery = element("div", undefined, "muted");
+          card.append(connection, battery);
+          const controls = element("div", undefined, "row");
+          const speed = element("input");
+          speed.type = "number";
+          speed.min = -100;
+          speed.max = 100;
+          speed.value = 50;
+          controls.append(
+            speed,
+            action(
+              "Set",
+              () => `/train/${encodeURIComponent(name)}/speed/${speed.value}`
+            ),
+            action("STOP", `/train/${encodeURIComponent(name)}/speed/0`, "stop")
+          );
+          card.append(controls);
+          trains.append(card);
+          view = {card, connection, battery};
+          trainCards.set(name, view);
+        }
+        view.connection.textContent = train.connected ? "connected" : "disconnected";
+        view.connection.className = view.connection.textContent;
+        view.battery.textContent = `battery ${train.battery_percent ?? "–"}% · ${train.voltage ?? "–"} V`;
       }
     }
 

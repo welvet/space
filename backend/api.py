@@ -20,7 +20,7 @@ INDEX = Path(__file__).resolve().parents[1] / "index.html"
 
 class ApiAccessLogger(AccessLogger):
     def log(self, request, response, time):
-        if request.path != "/info":
+        if request.method != "GET":
             super().log(request, response, time)
 
 

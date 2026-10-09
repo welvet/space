@@ -18,4 +18,4 @@ backend:
 
 scan-ble:
 	@test -d .venv || python3 -m venv .venv
-	@. .venv/bin/activate && pip install --quiet -e . && ./tools/scan-ble
+	@.venv/bin/python -m pip install --quiet -e . && .venv/bin/python tools/scan-ble
