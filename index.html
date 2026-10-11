@@ -110,6 +110,7 @@
     }
 
     backendActions.append(action("Restart backend", "/restart"));
+    backendActions.append(action("Shutdown trains & remotes", "/shutdown", "stop"));
 
     function filterEvents() {
       for (const event of events.children) {

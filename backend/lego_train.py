@@ -47,6 +47,19 @@ class LegoTrain:
     def getSpeed(self, train: str) -> int:
         return self._speed[train]
 
+    async def shutdown(self) -> None:
+        results = await asyncio.gather(*(
+            client.write_gatt_char(
+                HUB_CHARACTERISTIC_UUID,
+                bytes([0x04, 0x00, 0x02, 0x01]),
+            )
+            for client in list(self._clients.values())
+            if client.is_connected
+        ), return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                raise result
+
     def info(self) -> dict[str, dict[str, object]]:
         return {
             train: {

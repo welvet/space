@@ -49,6 +49,7 @@ class Api:
         app.router.add_get("/info", self._info)
         app.router.add_get("/events", self._event_stream)
         app.router.add_post("/restart", self._restart)
+        app.router.add_post("/shutdown", self._shutdown)
         app.router.add_post("/train/{train}/speed/{speed}", self._set_speed)
         app.router.add_post(
             "/device/{device}/switch/{position}",
@@ -80,6 +81,17 @@ class Api:
             request.match_info["device"],
             request.match_info["position"],
         )
+        return web.Response(status=204)
+
+    async def _shutdown(self, _: web.Request) -> web.Response:
+        results = await asyncio.gather(
+            self._train.shutdown(),
+            self._remote.shutdown(),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                raise result
         return web.Response(status=204)
 
     async def _restart(self, _: web.Request) -> web.Response:
