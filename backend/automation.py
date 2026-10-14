@@ -69,6 +69,9 @@ class Automation:
     def _on_button(self, remote: str, button: str) -> None:
         asyncio.create_task(self.on_button(remote, button))
 
+    async def runSwitch(self, device: str, commands: list[dict[str, object]]) -> None:
+        await self._devices.runSwitch(device, commands)
+
     async def _detected(self, tag: str, detector: str, cooldown: float) -> None:
         train = self._trains_by_tag.get(self._normalize(tag))
         if train is None:

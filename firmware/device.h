@@ -12,7 +12,7 @@ struct DeviceState {
 };
 
 struct DeviceCommand {
-  char payload[256];
+  char payload[2048];
 };
 
 extern QueueHandle_t events;

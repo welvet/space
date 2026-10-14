@@ -19,7 +19,7 @@ void setup() {
   DeviceState initial = {};
   strcpy(initial.payload, "{\"ready\":false}");
   xQueueOverwrite(state, &initial);
-  if (xTaskCreate(deviceTask, "Device", 4096, nullptr, 1, &deviceTaskHandle) != pdPASS) abort();
+  if (xTaskCreate(deviceTask, "Device", 8192, nullptr, 1, &deviceTaskHandle) != pdPASS) abort();
   connection.setup();
 }
 

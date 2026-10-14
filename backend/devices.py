@@ -34,8 +34,37 @@ class Devices:
         }
 
     async def setSwitch(self, device: str, position: str) -> None:
+        if self._connections[device]["type"] == "SWITCH":
+            await self.runSwitch(device, [
+                {"cmd": "power", "value": 1},
+                {"cmd": "rotate", "value": int(position)},
+            ])
+            return
         writer = self._connections[device]["writer"]
         writer.write((json.dumps({"cmd": "move", "position": position}) + "\n").encode())
+        await writer.drain()
+
+    async def runSwitch(self, device: str, commands: list[dict[str, object]]) -> None:
+        if not isinstance(commands, list) or not commands:
+            raise ValueError("Expected a nonempty command list")
+        for operation in commands:
+            if not isinstance(operation, dict):
+                raise ValueError("Expected command objects")
+            cmd, value = operation.get("cmd"), operation.get("value")
+            if type(value) is not int or not (
+                (cmd == "power" and value in (0, 1))
+                or (cmd == "rotate" and -90 <= value <= 90)
+                or (cmd == "sleep" and 0 <= value <= 2147483647)
+            ):
+                raise ValueError("Invalid command or value")
+        payload = json.dumps({"cmd": "batch", "commands": commands}, separators=(",", ":")).encode()
+        if len(payload) >= 2048:
+            raise ValueError("Command batch exceeds 2047 bytes")
+        connection = self._connections[device]
+        if connection["type"] != "SWITCH":
+            raise ValueError("Device is not a SWITCH")
+        writer = connection["writer"]
+        writer.write(payload + b"\n")
         await writer.drain()
 
     def on_detector(self, device: str, callback: Callable[[str], None]) -> None:

@@ -65,6 +65,8 @@ def generated(config, device):
         ]
     elif profile["task"] == "motor":
         lines += [f"constexpr int MOTOR_PIN = {profile['pin']};"]
+    elif profile["task"] == "switch":
+        lines += [f"constexpr int SERVO_PIN = {profile['pin']};"]
     else:
         raise SystemExit(f"Unknown task: {profile['task']}")
     return "\n".join(lines + [""])

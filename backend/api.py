@@ -52,6 +52,10 @@ class Api:
         app.router.add_post("/shutdown", self._shutdown)
         app.router.add_post("/train/{train}/speed/{speed}", self._set_speed)
         app.router.add_post(
+            "/device/{device}/switch",
+            self._run_switch,
+        )
+        app.router.add_post(
             "/device/{device}/switch/{position}",
             self._set_switch,
         )
@@ -81,6 +85,15 @@ class Api:
             request.match_info["device"],
             request.match_info["position"],
         )
+        return web.Response(status=204)
+
+    async def _run_switch(self, request: web.Request) -> web.Response:
+        try:
+            await self._devices.runSwitch(request.match_info["device"], await request.json())
+        except (ValueError, TypeError) as error:
+            raise web.HTTPBadRequest(text=str(error)) from None
+        except KeyError:
+            raise web.HTTPNotFound(text="Device is not connected") from None
         return web.Response(status=204)
 
     async def _shutdown(self, _: web.Request) -> web.Response:
