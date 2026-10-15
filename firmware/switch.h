@@ -72,7 +72,7 @@ inline void deviceTask(void*) {
           angle = value;
         }
         if (powered) {
-          const uint32_t pulseUs = 1000 + (angle + 90) * 1000 / 180;
+          const uint32_t pulseUs = 500 + (angle + 90) * 2000 / 180;
           ledcWrite(SERVO_PIN, pulseUs * 65535UL / 20000UL);
         }
         stateMessage["power"] = powered;

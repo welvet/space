@@ -43,7 +43,7 @@ make install device=NFC_READER
 # Switch servo
 
 Board: ESP32 NodeMCU / DevKit, ESP32-WROOM-32, CH9102F USB-to-serial.
-Servo: MG90S positional servo, on a separate ESP32.
+Servo: TianKongRC MG90S positional servo, 180° travel, 4.8–6.0 V, on a separate ESP32.
 Device identifier: `SWITCH_<MAC>`, using the same MAC source as the NFC reader.
 
 | MG90S | Connection |
@@ -60,7 +60,7 @@ The local `firmware.json` SWITCH profile uses task `switch` and pin `18`.
 make install device=SWITCH
 ```
 
-Control uses 50 Hz PWM with 1000–2000 µs pulses and requires Arduino-ESP32 3.x. `rotate` sets a signed target angle from −90 to +90 degrees, with 0 at centre; it is not a relative movement. Actual travel depends on servo calibration. `power` accepts 1 or 0 to enable or stop PWM; stopping PWM does not disconnect the 5 V supply. `sleep` waits for an integer number of milliseconds. Add a sleep after rotation to allow physical movement before disabling PWM.
+Control uses 50 Hz PWM with the specified 500–2500 µs pulse range and requires Arduino-ESP32 3.x. `rotate` sets a signed target angle from −90 to +90 degrees, with 0 at centre (1500 µs); it is not a relative movement. `power` accepts 1 or 0 to enable or stop PWM; stopping PWM does not disconnect the 5 V supply. `sleep` waits for an integer number of milliseconds. Add a sleep after rotation to allow physical movement before disabling PWM.
 
 POST a JSON list to `/device/SWITCH_<MAC>/switch`, or call `Automation.runSwitch(device, commands)`:
 
