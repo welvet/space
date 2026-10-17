@@ -1,6 +1,7 @@
 arduino.json
 firmware.json
 backend.json
+angles.tmp.json
 .venv/
 *.egg-info/
 __pycache__/

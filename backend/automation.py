@@ -24,6 +24,7 @@ class Automation:
             for tag in config["nfc_tags"]
         }
         self._last_seen: dict[tuple[str, str], float] = {}
+        self._last_switch: dict[str, float] = {}
         self._event_callbacks: list[Callable[[str], None]] = []
         remote.on_button(self._on_button)
 
@@ -63,8 +64,27 @@ class Automation:
         self,
         device: str,
         position: str,
+        *,
+        a: int,
+        b: int,
     ) -> None:
-        await self._devices.setSwitch(device, position)
+        angle = {"A": a, "B": b}[position]
+        now = asyncio.get_running_loop().time()
+        last = self._last_switch.get(device)
+        if last is not None and now - last < 0.5:
+            return
+        self._last_switch[device] = now
+        try:
+            await self.runSwitch(device, [
+                {"cmd": "power", "value": 1},
+                {"cmd": "rotate", "value": angle},
+                {"cmd": "sleep", "value": 300},
+                {"cmd": "rotate", "value": 0},
+            ])
+        except Exception:
+            self._last_switch.pop(device, None)
+            raise
+        self.event(f"{device} switch {position} ({angle}°)")
 
     def _on_button(self, remote: str, button: str) -> None:
         asyncio.create_task(self.on_button(remote, button))
